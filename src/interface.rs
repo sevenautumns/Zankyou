@@ -4,7 +4,7 @@ use std::{
 };
 
 pub trait AudioInterface {
-    fn play_note(note: Note, interval: Duration);
+    fn play_note(&mut self, note: Note, interval: Duration);
 }
 
 // Define an enum for the letter name of the note
@@ -20,11 +20,12 @@ pub enum NoteLetter {
 }
 
 // Define accidentals
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Default)]
 pub enum Accidental {
     Sharp,
     Flat,
-    Natural, // Explicitly Natural for clarity, or implied if Option::None
+    #[default]
+    Natural,
 }
 
 // Define the struct for a musical note
