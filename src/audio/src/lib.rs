@@ -1,14 +1,13 @@
+use core::{domain::notes::Note, interfaces::audio::AudioInterfaceTrait};
 use std::{io::Cursor, sync::Arc, time::Duration};
 
-use color_eyre::{Result, eyre::ContextCompat};
+use anyhow::{Context, Result};
 use cpal::{
     Device, FromSample, Host, I24, SampleFormat, SizedSample, StreamConfig,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
-use log::error;
 use rustysynth::{SoundFont, Synthesizer, SynthesizerSettings};
-
-use crate::interface::{AudioInterface, Note};
+use tracing::error;
 
 pub struct AudioDevice {
     _host: Host,
@@ -66,7 +65,7 @@ impl AudioDevice {
     }
 }
 
-impl AudioInterface for AudioDevice {
+impl AudioInterfaceTrait for AudioDevice {
     fn play_note(&mut self, note: Note, interval: Duration) {
         let waveform = self.generate_waveform(note, interval);
         waveform.play(self).unwrap();

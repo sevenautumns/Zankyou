@@ -2,12 +2,7 @@ use std::{
     cmp::Ordering,
     fmt,
     ops::{Add, Sub},
-    time::Duration,
 };
-
-pub trait AudioInterface {
-    fn play_note(&mut self, note: Note, interval: Duration);
-}
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum NoteLetter {
@@ -31,7 +26,7 @@ impl fmt::Display for NoteLetter {
             NoteLetter::A => 'A',
             NoteLetter::B => 'B',
         };
-        write!(f, "{}", c)
+        write!(f, "{c}")
     }
 }
 
