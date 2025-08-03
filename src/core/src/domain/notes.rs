@@ -138,7 +138,7 @@ impl Sub<u8> for Note {
 
 impl PartialOrd for Note {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.to_midi_number().partial_cmp(&other.to_midi_number())
+        Some(self.cmp(other))
     }
 }
 

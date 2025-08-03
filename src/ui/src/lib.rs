@@ -15,9 +15,16 @@ use crossterm::terminal::{
 use futures::StreamExt;
 use gag::Gag;
 use ratatui::prelude::*;
+use ratatui::widgets::{Block, Borders, Padding, Paragraph};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::time;
 use tracing::error;
+use widgets::config::{ConfigWidget, ConfigWidgetState};
+use widgets::game::{GameWidget, GameWidgetState};
+use widgets::icon::{IconWidget, IconWidgetState};
+use widgets::menu::{MenuWidget, SideMenuWidgetState};
+
+mod widgets;
 
 pub struct RatatuiView {
     app: App,
@@ -53,16 +60,40 @@ impl CoreInterface {
     }
 }
 
+#[derive(Default, Debug, Clone)]
+pub enum MenuState {
+    #[default]
+    Game,
+    Config,
+}
+
+#[derive(Default, Debug, Clone)]
+pub enum CursorState {
+    #[default]
+    Menu,
+    Main,
+}
+
 pub struct App {
+    icon_widget: IconWidgetState,
+    menu_widget: SideMenuWidgetState,
+    game_widget: GameWidgetState,
+    config_widget: ConfigWidgetState,
+    _cursor_state: CursorState,
+    menu_state: MenuState,
     running: bool,
-    msg: String,
 }
 
 impl App {
     fn new() -> App {
         App {
+            icon_widget: IconWidgetState::default(),
+            menu_widget: SideMenuWidgetState::default(),
+            game_widget: GameWidgetState::default(),
+            config_widget: ConfigWidgetState::default(),
+            _cursor_state: CursorState::default(),
+            menu_state: MenuState::default(),
             running: true,
-            msg: "Hello, world!".into(),
         }
     }
 }
@@ -74,7 +105,7 @@ impl Drop for RatatuiView {
 }
 
 impl RatatuiView {
-    pub fn new() -> (
+    pub fn create() -> (
         UserInterface,
         Pin<Box<dyn Future<Output = anyhow::Result<()>>>>,
     ) {
@@ -109,7 +140,7 @@ impl RatatuiView {
             tokio::select! {
                 event = self.core_interface.receive() => {
                     match event {
-                        CoreMessage::MainMenuMessage(_) => self.app.msg = "Current received message: Start".into(),
+                        CoreMessage::MainMenuMessage(_) => todo!(),
                         CoreMessage::GameMessage(_) => todo!()
                     }
                 }
@@ -173,21 +204,37 @@ impl RatatuiView {
         let area = f.area();
         let vertical_split = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1),
-                Constraint::Min(2),
-                Constraint::Length(1),
-            ])
+            .constraints([Constraint::Min(0), Constraint::Length(1)])
             .split(area);
-        let header = vertical_split[0];
-        let body = vertical_split[1];
-        let footer = vertical_split[2];
 
-        let text = Text::raw("Zankyou");
-        f.render_widget(text, header);
-        let text = Text::raw(app.msg.clone());
-        f.render_widget(text, body);
-        let text = Text::raw("Press q to quit");
-        f.render_widget(text, footer);
+        let horizontal_split = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Length(30), Constraint::Min(10)])
+            .split(vertical_split[0]);
+
+        let side_menu = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(3), Constraint::Min(2)])
+            .split(horizontal_split[0]);
+
+        let footer_block = Block::default()
+            .borders(Borders::NONE)
+            .gray()
+            .padding(Padding::new(1, 0, 0, 0));
+        let quit_text = Paragraph::new(Text::raw("Press q to quit")).block(footer_block);
+        f.render_stateful_widget(IconWidget {}, side_menu[0], &mut app.icon_widget);
+        f.render_stateful_widget(MenuWidget {}, side_menu[1], &mut app.menu_widget);
+        f.render_widget(quit_text, vertical_split[1]);
+
+        match app.menu_state {
+            MenuState::Game => {
+                f.render_stateful_widget(GameWidget {}, horizontal_split[1], &mut app.game_widget)
+            }
+            MenuState::Config => f.render_stateful_widget(
+                ConfigWidget {},
+                horizontal_split[1],
+                &mut app.config_widget,
+            ),
+        }
     }
 }

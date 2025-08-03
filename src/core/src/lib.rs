@@ -13,7 +13,7 @@ pub trait CoreMessageHandler {
 pub struct CoreModel {
     audio: Box<dyn AudioInterfaceTrait>,
     ui: Box<dyn UserInterfaceTrait>,
-    state: State,
+    _state: State,
     running: bool,
 }
 
@@ -27,7 +27,7 @@ impl Core {
             model: CoreModel {
                 audio,
                 ui,
-                state: State::default(),
+                _state: State::default(),
                 running: true,
             },
         }

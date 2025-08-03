@@ -9,11 +9,6 @@ resolver = "2"
 
 [workspace.dependencies]
 anyhow = "1"
-arcstr = { version = "1.1", features = ["serde"] }
 async-trait = "0.1"
-enum_dispatch = "0.3"
-im = { version = "15.1", features = ["serde", "rayon"] }
 tokio = { version = "1.27", features = [ "full" ]}
 tracing = "0.1"
-tracing-subscriber = "0.3"
-tracing-appender = "0.2"
