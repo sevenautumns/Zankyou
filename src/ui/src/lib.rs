@@ -1,13 +1,11 @@
-use core::interfaces::ui::{
-    CoreMessage, UIGameMessage, UIMainMenuMessage, UserInterface, UserInterfaceMessage,
-};
+use core::interfaces::ui::{CoreMessage, UIGameMessage, UserInterface, UserInterfaceMessage};
 use std::io::{self, Stdout};
 use std::pin::Pin;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use crossterm::event::EventStream;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture, Event};
+use crossterm::event::{EventStream, KeyCode};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -23,8 +21,28 @@ use widgets::config::{ConfigWidget, ConfigWidgetState};
 use widgets::game::{GameWidget, GameWidgetState};
 use widgets::icon::{IconWidget, IconWidgetState};
 use widgets::menu::{MenuWidget, SideMenuWidgetState};
+use widgets::{HIGHLIGHT_STYLE, Selection};
 
 mod widgets;
+
+// handles messages from the core
+pub trait CoreMessageHandler {
+    fn handle(self, view: &mut RatatuiView);
+}
+
+// handles keyboard/mouse events
+pub trait EventHandler {
+    fn handle(self, event: Event, view: &mut RatatuiView);
+}
+
+impl CoreMessageHandler for CoreMessage {
+    fn handle(self, view: &mut crate::RatatuiView) {
+        match self {
+            CoreMessage::MainMenuMessage(msg) => msg.handle(view),
+            CoreMessage::GameMessage(msg) => msg.handle(view),
+        }
+    }
+}
 
 pub struct RatatuiView {
     app: App,
@@ -60,18 +78,69 @@ impl CoreInterface {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+//TODO: clean up the states
+#[derive(Debug, Clone)]
 pub enum MenuState {
-    #[default]
-    Game,
-    Config,
+    Game(MenuGame),
+    Config(MenuConfig),
+}
+
+impl Default for MenuState {
+    fn default() -> Self {
+        Self::Game(MenuGame {})
+    }
 }
 
 #[derive(Default, Debug, Clone)]
+pub struct MenuGame {}
+
+#[derive(Default, Debug, Clone)]
+pub struct MenuConfig {}
+
+#[derive(Debug, Clone)]
 pub enum CursorState {
-    #[default]
-    Menu,
-    Main,
+    Menu(CursorMenu),
+    Main(CursorMain),
+}
+
+impl Default for CursorState {
+    fn default() -> Self {
+        Self::Menu(CursorMenu {})
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct CursorMenu {}
+
+#[derive(Default, Debug, Clone)]
+pub struct CursorMain {}
+
+impl EventHandler for CursorState {
+    fn handle(self, event: Event, view: &mut RatatuiView) {
+        match self {
+            CursorState::Menu(menu) => menu.handle(event, view),
+            CursorState::Main(main) => main.handle(event, view),
+        }
+    }
+}
+
+impl EventHandler for CursorMain {
+    fn handle(self, event: Event, view: &mut crate::RatatuiView) {
+        if let Event::Key(key_event) = event {
+            match key_event.code {
+                KeyCode::Left | KeyCode::Esc => {
+                    view.app.transition_cursor(CursorState::Menu(CursorMenu {}));
+                    view.app.game_widget.reset();
+                }
+                _ => match view.app.menu_state {
+                    MenuState::Game(_) => if let KeyCode::Char('n') = key_event.code { view.core_interface.send(
+                        UserInterfaceMessage::GameMessage(UIGameMessage::NoteRequest),
+                    ) },
+                    MenuState::Config(_) => {}
+                },
+            }
+        }
+    }
 }
 
 pub struct App {
@@ -79,22 +148,46 @@ pub struct App {
     menu_widget: SideMenuWidgetState,
     game_widget: GameWidgetState,
     config_widget: ConfigWidgetState,
-    _cursor_state: CursorState,
+    cursor_state: CursorState,
     menu_state: MenuState,
     running: bool,
 }
 
 impl App {
     fn new() -> App {
+        let mut menu_widget = SideMenuWidgetState::default();
+        menu_widget.select(Style::default().fg(Color::Cyan));
         App {
             icon_widget: IconWidgetState::default(),
-            menu_widget: SideMenuWidgetState::default(),
+            menu_widget,
             game_widget: GameWidgetState::default(),
             config_widget: ConfigWidgetState::default(),
-            _cursor_state: CursorState::default(),
+            cursor_state: CursorState::default(),
             menu_state: MenuState::default(),
             running: true,
         }
+    }
+
+    fn transition_cursor(&mut self, state: CursorState) {
+        match (&self.cursor_state, &self.menu_state) {
+            (CursorState::Menu(_), _) => self.menu_widget.unselect(),
+            (CursorState::Main(_), MenuState::Game(_)) => self.game_widget.unselect(),
+            (CursorState::Main(_), MenuState::Config(_)) => self.config_widget.unselect(),
+        }
+
+        match (&state, &self.menu_state) {
+            (CursorState::Menu(_), _) => self.menu_widget.select(HIGHLIGHT_STYLE),
+            (CursorState::Main(_), MenuState::Game(_)) => self.game_widget.select(HIGHLIGHT_STYLE),
+            (CursorState::Main(_), MenuState::Config(_)) => {
+                self.config_widget.select(HIGHLIGHT_STYLE)
+            }
+        }
+
+        self.cursor_state = state;
+    }
+
+    fn transition_menu(&mut self, menu: MenuState) {
+        self.menu_state = menu;
     }
 }
 
@@ -139,10 +232,8 @@ impl RatatuiView {
         while self.app.running {
             tokio::select! {
                 event = self.core_interface.receive() => {
-                    match event {
-                        CoreMessage::MainMenuMessage(_) => todo!(),
-                        CoreMessage::GameMessage(_) => todo!()
-                    }
+                    event.handle(self);
+                    needs_update = true;
                 }
                 ct_event = event.next() => {
                     self.handle_event(ct_event).await;
@@ -177,26 +268,9 @@ impl RatatuiView {
     }
 
     async fn handle_event(&mut self, ct_event: Option<Result<Event, std::io::Error>>) {
-        if let Some(Ok(Event::Key(event))) = ct_event {
-            match event.code {
-                crossterm::event::KeyCode::Enter => {
-                    self.core_interface
-                        .send(UserInterfaceMessage::MainMenuMessage(
-                            UIMainMenuMessage::Start,
-                        ));
-                }
-                crossterm::event::KeyCode::Char('q') => {
-                    self.core_interface
-                        .send(UserInterfaceMessage::MainMenuMessage(
-                            UIMainMenuMessage::Quit,
-                        ));
-                }
-                crossterm::event::KeyCode::Char('n') => {
-                    self.core_interface
-                        .send(UserInterfaceMessage::GameMessage(UIGameMessage::Play));
-                }
-                _ => {}
-            }
+        if let Some(Ok(event)) = ct_event {
+            let cursor_event = self.app.cursor_state.clone();
+            cursor_event.handle(event, self);
         }
     }
 
@@ -221,16 +295,17 @@ impl RatatuiView {
             .borders(Borders::NONE)
             .gray()
             .padding(Padding::new(1, 0, 0, 0));
+
         let quit_text = Paragraph::new(Text::raw("Press q to quit")).block(footer_block);
         f.render_stateful_widget(IconWidget {}, side_menu[0], &mut app.icon_widget);
         f.render_stateful_widget(MenuWidget {}, side_menu[1], &mut app.menu_widget);
         f.render_widget(quit_text, vertical_split[1]);
 
         match app.menu_state {
-            MenuState::Game => {
+            MenuState::Game(_) => {
                 f.render_stateful_widget(GameWidget {}, horizontal_split[1], &mut app.game_widget)
             }
-            MenuState::Config => f.render_stateful_widget(
+            MenuState::Config(_) => f.render_stateful_widget(
                 ConfigWidget {},
                 horizontal_split[1],
                 &mut app.config_widget,

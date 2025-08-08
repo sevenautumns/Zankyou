@@ -1,11 +1,12 @@
 use rand::{distr::StandardUniform, prelude::*};
+use rand_chacha::ChaCha12Rng;
 use std::cmp::{max, min};
 
 use tracing::debug;
 
 use super::notes::{Accidental, Note, NoteLetter};
 
-pub trait NoteSequence {
+pub trait NoteSequence: Send {
     fn next_note(&mut self) -> NoteTuple;
 }
 
@@ -51,6 +52,7 @@ impl Distribution<Accidental> for StandardUniform {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NoteTuple {
     reference: Note,
     divergence: Note,
@@ -76,17 +78,17 @@ impl NoteTuple {
     }
 }
 
-pub struct RandomNoteSequence<R: RngCore> {
-    rng: R,
+pub struct RandomNoteSequence {
+    rng: ChaCha12Rng,
 }
 
-impl<R: RngCore> RandomNoteSequence<R> {
-    pub fn new(rng: R) -> RandomNoteSequence<R> {
+impl RandomNoteSequence {
+    pub fn new(rng: ChaCha12Rng) -> RandomNoteSequence {
         RandomNoteSequence { rng }
     }
 }
 
-impl<R: RngCore> NoteSequence for RandomNoteSequence<R> {
+impl NoteSequence for RandomNoteSequence {
     fn next_note(&mut self) -> NoteTuple {
         let ref_note: Note = self.rng.random();
         let octave: i8 = self.rng.random_range(-12..=12);

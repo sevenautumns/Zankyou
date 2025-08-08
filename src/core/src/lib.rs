@@ -6,14 +6,15 @@ pub mod domain;
 pub mod interfaces;
 pub mod use_cases;
 
-pub trait CoreMessageHandler {
+// handles messages from the UI
+pub trait UIMessageHandler {
     fn handle(self, model: &mut CoreModel);
 }
 
 pub struct CoreModel {
     audio: Box<dyn AudioInterfaceTrait>,
     ui: Box<dyn UserInterfaceTrait>,
-    _state: State,
+    state: State,
     running: bool,
 }
 
@@ -27,7 +28,7 @@ impl Core {
             model: CoreModel {
                 audio,
                 ui,
-                _state: State::default(),
+                state: State::default(),
                 running: true,
             },
         }

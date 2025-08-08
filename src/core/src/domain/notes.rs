@@ -114,6 +114,17 @@ impl Note {
             octave,
         }
     }
+
+    pub fn distance(&self, note: &Note) -> u8 {
+        let note_value = self.to_midi_number();
+        let other_note_value = note.to_midi_number();
+
+        if note_value > other_note_value {
+            note_value.saturating_sub(other_note_value)
+        } else {
+            other_note_value.saturating_sub(note_value)
+        }
+    }
 }
 
 impl Add<u8> for Note {

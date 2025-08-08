@@ -1,15 +1,16 @@
-use crate::CoreMessageHandler;
 use crate::CoreModel;
-use crate::interfaces::ui::CoreMainMenuMessage;
-use crate::interfaces::ui::CoreMessage;
+use crate::UIMessageHandler;
+use crate::domain::state::GameModeState;
+use crate::domain::state::State;
 use crate::interfaces::ui::UIMainMenuMessage;
 
-impl CoreMessageHandler for UIMainMenuMessage {
+impl UIMessageHandler for UIMainMenuMessage {
     fn handle(self, model: &mut CoreModel) {
         match self {
-            UIMainMenuMessage::Start => model
-                .ui
-                .send(CoreMessage::MainMenuMessage(CoreMainMenuMessage::Start)),
+            UIMainMenuMessage::Start => {
+                model.state = State::GameModeState(GameModeState::default());
+                //TODO: start listener
+            }
             UIMainMenuMessage::Quit => model.running = false,
         }
     }
